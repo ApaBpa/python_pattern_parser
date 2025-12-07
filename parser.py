@@ -13,7 +13,7 @@ def extract_patterns(path: Path):
                 continue
     return patterns
 
-def generate_cpp(patterns, max_len=256, header_guard="PATTERNS_GENERATED_H"):
+def generate_cpp(patterns, max_len=512, header_guard="PATTERNS_GENERATED_H"):
     def pattern_bytes_literal(p):
         return ", ".join(f"0x{ord(c):02x}" for c in p)
 
