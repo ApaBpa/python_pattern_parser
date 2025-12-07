@@ -3,7 +3,7 @@
 
 #include <cstdint>
 
-constexpr std::size_t MAX_PATTERN_LEN = 512;   // max length of any pattern
+constexpr std::size_t MAX_PATTERN_LEN = 32;   // max length of any pattern
 
 struct Pattern {
     std::uint16_t id;       // pattern ID

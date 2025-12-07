@@ -5,13 +5,16 @@ from textwrap import dedent
 
 def extract_patterns(path: Path):
     patterns = []
+    max_len = 0
     with path.open(encoding="utf-8") as f:
         for line in f:
-            if line:
-                patterns.append(line.strip())
+            stripped = line.strip()
+            if stripped:  # Non-empty line
+                patterns.append(stripped)
+                max_len = max(max_len, len(stripped))
             else:
                 continue
-    return patterns
+    return patterns, max_len
 
 def generate_cpp(patterns, max_len=512, header_guard="PATTERNS_GENERATED_H"):
     def pattern_bytes_literal(p):
@@ -24,6 +27,7 @@ def generate_cpp(patterns, max_len=512, header_guard="PATTERNS_GENERATED_H"):
     lines.append("")
     lines.append("#include <cstdint>")
     lines.append("")
+    max_len = max(1, max_len)  # Ensure at least size 1
     lines.append(f"constexpr std::size_t MAX_PATTERN_LEN = {max_len};   // max length of any pattern")
     lines.append("")
     lines.append("struct Pattern {")
@@ -54,8 +58,8 @@ def main():
     in_path = Path(sys.argv[1])
     out_path = Path(sys.argv[2])
 
-    patterns = extract_patterns(in_path)
-    cpp_code = generate_cpp(patterns)
+    patterns, max_pattern_length = extract_patterns(in_path)
+    cpp_code = generate_cpp(patterns, max_pattern_length)
     out_path.write_text(cpp_code, encoding="utf-8")
 
 if __name__ == "__main__":
