@@ -90,39 +90,64 @@ def build_alphabet_maps(used_bytes: set[int]):
         byte_to_idx[b] = idx
     return used_sorted, byte_to_idx
 
-def generate_patterns_hpp(patterns, max_len=512, header_guard="PATTERNS_GENERATED_H"):
-    def pattern_bytes_literal(p: bytes):
-        return ", ".join(f"0x{b:02x}" for b in p)
+def map_patterns_to_indices(patterns: list[bytes], byte_to_idx: list[int]):
+    mapped: list[list[int]] = []
+    for p in patterns:
+        m = []
+        for b in p:
+            idx = byte_to_idx[b]
+            if idx == UNUSED:
+                raise RuntimeError("Alphabet map missing a byte that appears in patterns")
+            m.append(idx)
+        mapped.append(m)
+    return mapped
+
+
+def map_patterns_to_indices(patterns: list[bytes], byte_to_idx: list[int]):
+    mapped: list[list[int]] = []
+    for p in patterns:
+        m = []
+        for b in p:
+            idx = byte_to_idx[b]
+            if idx == UNUSED:
+                raise RuntimeError("Alphabet map missing a byte that appears in patterns")
+            m.append(idx)
+        mapped.append(m)
+    return mapped
+
+def generate_patterns_hpp_mapped(mapped_patterns, orig_lengths, max_len, header_guard="PATTERNS_GENERATED_H"):
+    def idx_literal(m):
+        return ", ".join(str(x) for x in m)  # indices are integers
 
     lines = []
-    lines.append("#include <cstddef>")
-    lines.append("#include <cstdint>")
     lines.append(f"#ifndef {header_guard}")
     lines.append(f"#define {header_guard}")
     lines.append("")
+    lines.append("#include <cstddef>")
     lines.append("#include <cstdint>")
     lines.append("")
-    max_len = max(1, max_len)  # Ensure at least size 1
-    lines.append(f"constexpr std::size_t MAX_PATTERN_LEN = {max_len};   // max length of any pattern")
+    max_len = max(1, max_len)
+    lines.append(f"constexpr std::size_t MAX_PATTERN_LEN = {max_len};")
     lines.append("")
     lines.append("struct Pattern {")
-    lines.append("    std::uint16_t id;       // pattern ID")
-    lines.append("    std::uint16_t length;   // number of valid bytes in 'bytes'")
-    lines.append("    std::uint8_t  bytes[MAX_PATTERN_LEN];")
+    lines.append("    std::uint16_t id;")
+    lines.append("    std::uint16_t length;")
+    lines.append("    std::uint16_t last_cycle0;  // floor((0 + length - 1)/2)")
+    lines.append("    std::uint16_t last_cycle1;  // floor((1 + length - 1)/2)")
+    lines.append("    std::uint16_t sym_idx[MAX_PATTERN_LEN]; // indices into USED_BYTES[]")
     lines.append("};")
     lines.append("")
-    lines.append(f"constexpr Pattern PATTERNS[] = {{")
+    lines.append("constexpr Pattern PATTERNS[] = {")
 
-    for idx, p in enumerate(patterns):
-        byte_list = pattern_bytes_literal(p)
-        # Missing elements in bytes[] are zero-initialized automatically
-        lines.append(f"    {{ {idx}, {len(p)}, {{ {byte_list} }} }},")
+    for idx, (m, L) in enumerate(zip(mapped_patterns, orig_lengths)):
+        lc0 = (0 + L - 1) // 2
+        lc1 = (1 + L - 1) // 2
+        lines.append(f"    {{ {idx}, {L}, {lc0}, {lc1}, {{ {idx_literal(m)} }} }},")
     lines.append("};")
     lines.append("")
     lines.append("constexpr std::size_t NUM_PATTERNS = sizeof(PATTERNS) / sizeof(PATTERNS[0]);")
     lines.append("")
     lines.append(f"#endif // {header_guard}")
-
     return "\n".join(lines)
 
 def generate_alphabet_hpp(used_bytes, header_guard="PATTERN_ALPHABET_H"):
@@ -181,8 +206,16 @@ def main():
     alphabet_out = Path(sys.argv[3])
 
     patterns, max_pattern_length, used_bytes = extract_patterns(in_path)
+
+    used_sorted, byte_to_idx = build_alphabet_maps(used_bytes)
+    mapped_patterns = map_patterns_to_indices(patterns, byte_to_idx)
     
-    patterns_hpp = generate_patterns_hpp(patterns, max_pattern_length)
+    patterns_hpp = generate_patterns_hpp_mapped(
+    mapped_patterns=mapped_patterns,
+    orig_lengths=[len(p) for p in patterns],
+    max_len=max_pattern_length,
+    )
+    
     alphabet_hpp = generate_alphabet_hpp(used_bytes)
 
     patterns_out.write_text(patterns_hpp, encoding="utf-8")
